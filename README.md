@@ -18,51 +18,16 @@ Using a special type to represent values that will exist in the future means tha
 
 Promises are suited for any asynchronous action that can succeed or fail exactly once, such as HTTP requests. If there is an asynchronous action that can "succeed" more than once, or delivers a series of values over time instead of just one, take a look at [Signals](https://github.com/JensRavens/Interstellar/) or [Observables](https://github.com/ReactiveX/RxSwift).
 
-## Installation
-
-### [CocoaPods](http://cocoapods.org/)
-
-1. Add the following to your [Podfile](http://guides.cocoapods.org/using/the-podfile.html):
-
-    ```rb
-    pod 'Promise'
-    ```
-
-2. Integrate your dependencies using frameworks: add `use_frameworks!` to your Podfile. 
-3. Run `pod install`.
-
-### [Carthage](https://github.com/Carthage/Carthage)
-
-1. Add the following to your [Cartfile](https://github.com/Carthage/Carthage/blob/master/Documentation/Artifacts.md#cartfile):
-
-    ```
-    github "khanlou/Promise"
-    ```
-
-2. Run `carthage update` and follow the steps as described in Carthage's [README](https://github.com/Carthage/Carthage#adding-frameworks-to-an-application).
-
-### [Swift Package Manager](https://swift.org/package-manager/)
-
-The Swift Package Manager is a tool for automating the distribution of Swift code and is integrated into the `swift` compiler. It is in early development, but Promise does support its use on supported platforms.
-
-Once you have your Swift package set up, adding AlamPromiseofire as a dependency is as easy as adding it to the `dependencies` value of your `Package.swift`.
-
-```swift
-dependencies: [
-    .Package(url: "https://github.com/khanlou/Promise.git", majorVersion: 2)
-]
-```
-
 ## Basic Usage
 
 To access the value once it arrives, you call the `then` method with a block.
 
-    ```swift
-    let usersPromise = fetchUsers() // Promise<[User]>
-    usersPromise.then({ users in
-        self.users = users
-    })
-    ```
+```swift
+let usersPromise = fetchUsers() // Promise<[User]>
+usersPromise.then({ users in
+    self.users = users
+})
+```
 
 All usage of the data in the `users` Promise is gated through the `then` method.
 
@@ -80,6 +45,7 @@ followersPromise.then({ followers in
     self.followers = followers
 })
 ```
+
 Based on whether you return a regular value or a promise, the `Promise` will determine whether it should transform the internal contents, or fire off the next promise and await its results.
 
 As long as the block you pass to `then` is one line long, its type signature will be inferred, which will make Promises much easier to read and work with.
@@ -98,6 +64,7 @@ fetchUsers()
         self.followers = followers
     })
 ```
+
 To catch any errors that are created along the way, you can add a `catch` block as well:
 
 ```swift
@@ -115,6 +82,7 @@ fetchUsers()
         displayError(error)
     })
 ```
+
 If any step in the chain fails, no more `then` blocks will be executed. Only failure blocks are executed. This is enforced in the type system as well. If the `fetchUsers()` promise fails (for example, because of a lack of internet), there's no way for the promise to construct a valid value for the `users` variable, and there's no way that block could be called.
 
 ## Creating Promises
@@ -173,24 +141,9 @@ fetchUsers()
         self.activityIndicator.stopAnimating()
     })
 ```
+
 Even if the network request fails, the activity indicator will stop. Note that the block that you pass to `always` has no parameters. Because the `Promise` doesn't know if it will succeed or fail, it will give you neither a value nor an error.
 
-### `all`
-
-`Promise.all` is a static method that waits for all the promises you give it to fulfill, and once they have, it fulfills itself with the array of all fulfilled values. For example, you might want to write code to hit an API endpoint once for each item in an array. `map` and `Promise.all` make that super easy:
-
-```swift
-let userPromises = users.map({ user in
-    APIClient.followUser(user)
-})
-Promise<()>.all(userPromises)
-    .then({
-        //all the users are now followed!
-    })
-    .catch  ({ error in
-        //one of the API requests failed
-    })
-```
 ### `ensure`
 
 `ensure` is a method that takes a predicate, and rejects the promise chain if that predicate fails.
@@ -207,7 +160,48 @@ URLSession.shared.dataTask(with: request)
         // the network request failed, or the status code was invalid
     })
 ```
-### Others
+
+## Static methods
+
+Static methods, like `zip`, `race`, `retry`, `all`, `kickoff` live in a namespace called `Promises`. Previously, they were static functions in the `Promise` class, but this meant that you had to specialize them with a generic before you could use them, like `Promise<()>.all`. This is ugly and hard to type, so as of v2.0, you now write `Promises.all`.
+
+### `all`
+
+`Promises.all` is a static method that waits for all the promises you give it to fulfill, and once they have, it fulfills itself with the array of all fulfilled values. For example, you might want to write code to hit an API endpoint once for each item in an array. `map` and `Promises.all` make that super easy:
+
+```swift
+let userPromises = users.map({ user in
+    APIClient.followUser(user)
+})
+Promises.all(userPromises)
+    .then({
+        //all the users are now followed!
+    })
+    .catch  ({ error in
+        //one of the API requests failed
+    })
+```
+
+### `kickoff`
+
+Because the `then` blocks of promises are a safe space for functions that `throw`, its sometimes useful to enter those safe spaces even if you don't have asynchronous work to do. `Promises.kickoff` is designed for that.
+
+```swift
+Promises
+	.kickoff({
+		return try initialValueFromThrowingFunction()
+	})
+	.then({ value in
+		//use the value from the throwing function
+	})
+	.catch({ error in
+		//if there was an error, you can handle it here.
+	})
+```
+
+This (coupled with `Optional.unrwap()`) is particularly useful when you want to start a promise chain from an optional value. 
+
+## Others behaviors
 
 These are some of the most useful behaviors, but there are others as well, like `race` (which races multiple promises), `retry` (which lets you retry a single promise multiple times), and `recover` (which lets you return a new `Promise` given an error, allowing you to recover from failure), and others.
 
@@ -217,7 +211,7 @@ You can find these behaviors in the [Promises+Extras.swift](https://github.com/k
 
 Each method on the `Promise` that accepts a block accepts an execution context with the parameter name `on:`. Usually, this execution context is a queue.
 
-```
+```swift
 Promise<Void>(queue: .main, work: { fulfill, reject in
     viewController.present(viewControllerToPresent, animated: flag, completion: {
         fulfill()
@@ -231,7 +225,7 @@ Because `ExecutionContext` is a protocol, other things can be passed here. One p
 
 To use this with table cells, the queue should be invalidated and reset on `prepareForReuse()`.
 
-```
+```swift
 class SomeTableViewCell: UITableViewCell {
     var invalidatableQueue = InvalidatableQueue()
         
@@ -245,8 +239,8 @@ class SomeTableViewCell: UITableViewCell {
     
     override func prepareForReuse() {
         super.prepareForReuse()
-        token.invalidate()
-        token = InvalidationToken()
+        invalidatableQueue.invalidate()
+        invalidatableQueue = InvalidatableQueue()
     }
 
 }
@@ -284,6 +278,7 @@ URLSession.shared.dataTask(with: request)
         // use the json
     })
 ```
+
 Working with optionals can be made simpler with a little extension.
 
 ```swift
@@ -298,6 +293,7 @@ extension Optional {
     }
 }
 ```
+
 Because you're in an environment where you can freely throw and it will be handled for you (in the form of a rejected Promise), you can now easily unwrap optionals. For example, if you need a specific key out of a json dictionary:
 
 ```swift
@@ -305,6 +301,7 @@ Because you're in an environment where you can freely throw and it will be handl
     return try (json["user"] as? [String: Any]).unwrap()
 })
 ```
+
 And you will transform your optional into a non-optional.
 
 ### Threading Model
@@ -321,6 +318,41 @@ Promise<Void>(work: { fulfill, reject in
 }).then(on: DispatchQueue.main, {
 	self.data = data
 })
+```
+
+## Installation
+
+### [CocoaPods](http://cocoapods.org/)
+
+1. Add the following to your [Podfile](http://guides.cocoapods.org/using/the-podfile.html):
+
+    ```rb
+    pod 'Promise'
+    ```
+
+2. Integrate your dependencies using frameworks: add `use_frameworks!` to your Podfile. 
+3. Run `pod install`.
+
+### [Carthage](https://github.com/Carthage/Carthage)
+
+1. Add the following to your [Cartfile](https://github.com/Carthage/Carthage/blob/master/Documentation/Artifacts.md#cartfile):
+
+    ```
+    github "khanlou/Promise"
+    ```
+
+2. Run `carthage update` and follow the steps as described in Carthage's [README](https://github.com/Carthage/Carthage#adding-frameworks-to-an-application).
+
+### [Swift Package Manager](https://swift.org/package-manager/)
+
+The Swift Package Manager is a tool for automating the distribution of Swift code and is integrated into the `swift` compiler. It is in early development, but Promise does support its use on supported platforms.
+
+Once you have your Swift package set up, adding AlamPromiseofire as a dependency is as easy as adding it to the `dependencies` value of your `Package.swift`.
+
+```swift
+dependencies: [
+    .Package(url: "https://github.com/khanlou/Promise.git", majorVersion: 2)
+]
 ```
 
 ## Playing Around
